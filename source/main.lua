@@ -3,14 +3,33 @@ if (os.getenv("LOCAL_LUA_DEBUGGER_VSCODE") == "1") then
     require("lldebugger").start()
 end
 
+-- VScode Lua Language Server
+---@class SFDItem : table
+---@field parts SFDPart[]
+---@field partCount integer
+---@field fileName string
+---@field gameName string
+---@field equipmentLayer integer
+---@field itemID string
+---@field jacketUnderBelt boolean
+---@field canEquip boolean
+---@field canScript boolean
+---@field colorPalette string
+
+---@class SFDPart : table
+---@field type integer
+---@field itemID string
+---@field textureCount integer
+---@field textures love.ImageData[]
+
+--
+--
+
 Bit = require("bit")
 
-function StringReplace(s, match, newMatch)
-    local newString = string.gsub(s, match, newMatch)
-
-    return newString
-end
-
+---@param s string
+---@param separator string
+---@return string[]
 function StringSplit(s, separator)
     local items = {}
 
@@ -25,10 +44,14 @@ local ByteStream = require("class.byte_stream")
 local INIHandler = require("class.ini_handler")
 local PathUtility = require("class.path_utility")
 
+---@param str string
+---@param ... any
 local function printf(str, ...)
     print(string.format(str, ...))
 end
 
+---@param imageData love.ImageData
+---@return boolean
 local function isImageDataEmpty(imageData)
     local imageWidth = imageData:getWidth()
     local imageHeight = imageData:getHeight()
@@ -44,6 +67,8 @@ local function isImageDataEmpty(imageData)
     return true
 end
 
+---@param filePath string
+---@param item SFDItem
 local function exportSFDItem(filePath, item)
     printf("Exporting ITEM: %s", filePath)
 
@@ -172,6 +197,8 @@ local function exportSFDItem(filePath, item)
     end
 end
 
+---@param filePath string
+---@return SFDItem
 local function importSFDItem(filePath)
     printf("Importing ITEM: %s", filePath)
 
@@ -261,6 +288,8 @@ local function importSFDItem(filePath)
     return item
 end
 
+---@param filePath string
+---@param item SFDItem
 local function exportSFDItemFolder(filePath, item)
     printf("Exporting FOLDER: %s", filePath)
 
@@ -294,6 +323,8 @@ local function exportSFDItemFolder(filePath, item)
     end
 end
 
+---@param iniFilePath string
+---@return SFDItem
 local function importSFDItemFolder(iniFilePath)
     printf("Importing FOLDER: %s", iniFilePath)
 
@@ -418,7 +449,7 @@ function love.load(arguments)
                     if (itemExtension == "ini") then
                         local SFDItem = importSFDItemFolder(itemPath)
 
-                        local itemOutputDirectoryPath = StringReplace(PathUtility.getDirectoryPath(itemDirectory), inputPath, outputPath)
+                        local itemOutputDirectoryPath = PathUtility.getDirectoryPath(string.gsub(itemDirectory, inputPath, outputPath))
                         local itemOutputPath = PathUtility.add(itemOutputDirectoryPath, SFDItem.fileName .. ".item")
                         love.filesystem.createDirectory(itemOutputDirectoryPath)
 
@@ -441,8 +472,8 @@ function love.load(arguments)
                     if (itemExtension == "item") then
                         local SFDItem = importSFDItem(itemPath)
 
-                        local itemOutputPath = StringReplace(itemPath, inputPath, outputPath)
-                        local itemOutputDirectoryPath = PathUtility.add(PathUtility.getDirectoryPath(itemOutputPath), SFDItem.gameName)
+                        local itemOutputPath = string.gsub(itemPath, inputPath, outputPath)
+                        local itemOutputDirectoryPath = PathUtility.add(PathUtility.getDirectoryPath(itemOutputPath), SFDItem.fileName)
                         love.filesystem.createDirectory(itemOutputDirectoryPath)
 
                         exportSFDItemFolder(itemOutputDirectoryPath, SFDItem)
@@ -464,7 +495,7 @@ function love.load(arguments)
                     if (itemExtension == "item") then
                         local SFDItem = importSFDItem(itemPath)
 
-                        local itemOutputPath = StringReplace(itemPath, inputPath, outputPath)
+                        local itemOutputPath = string.gsub(itemPath, inputPath, outputPath)
                         love.filesystem.createDirectory(PathUtility.getDirectoryPath(itemOutputPath))
 
                         exportSFDItem(itemOutputPath, SFDItem)

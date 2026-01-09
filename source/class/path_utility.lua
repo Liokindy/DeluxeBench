@@ -39,11 +39,11 @@ function PathUtility.add(path, ...)
 end
 
 function PathUtility.osify(path)
-    return StringReplace(path, PathUtility.unixDirectorySeparator, PathUtility.systemDirectorySeparator)
+    return string.gsub(path, PathUtility.unixDirectorySeparator, PathUtility.systemDirectorySeparator)
 end
 
 function PathUtility.unixify(path)
-    return StringReplace(path, PathUtility.systemDirectorySeparator, PathUtility.unixDirectorySeparator)
+    return string.gsub(path, PathUtility.systemDirectorySeparator, PathUtility.unixDirectorySeparator)
 end
 
 function PathUtility.split(path, separator)
@@ -76,13 +76,10 @@ function PathUtility.getExtension(path)
 end
 
 function PathUtility.getDirectoryPath(path)
-    path = PathUtility.trimEnd(path)
+    path = PathUtility.trim(path)
+    path = path .. PathUtility.unixDirectorySeparator
 
     local items = PathUtility.split(path)
-
-    if (#items - 1 == 1) then
-        return "." .. PathUtility.unixDirectorySeparator
-    end
 
     return table.concat(items, PathUtility.unixDirectorySeparator, 1, #items - 1)
 end
