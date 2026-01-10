@@ -348,7 +348,7 @@ local function importSFDItemFolder(iniFilePath)
     item.colorPalette = iniHandler:get("ColorPalette")
 
     item.parts = {}
-    item.partCount = 6
+    item.partCount = 0
 
     for i=0, 5 do
         item.parts[i] = {}
@@ -375,9 +375,11 @@ local function importSFDItemFolder(iniFilePath)
                     if (item.parts[partIndex] and not item.parts[partIndex].textures[textureID]) then
                         item.parts[partIndex].textures[textureID] = texture
                     end
+
+                    item.parts[partIndex].textureCount = math.max(item.parts[partIndex].textureCount, textureID + 1)
                 end
 
-                item.parts[partIndex].textureCount = item.parts[partIndex].textureCount + 1
+                item.partCount = math.max(item.partCount, partIndex + 1)
             end
         end
     end
