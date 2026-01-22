@@ -1,398 +1,18 @@
--- VSCode "Local Lua Debugger" extension
-if (os.getenv("LOCAL_LUA_DEBUGGER_VSCODE") == "1") then
-    require("lldebugger").start()
-end
+if (os.getenv("LOCAL_LUA_DEBUGGER_VSCODE") == "1") then require("lldebugger").start() end
+---@alias Color {[1]: number, [2]: number, [3]: number, [4]: number?}
 
--- VScode Lua Language Server
----@class SFDItem : table
----@field parts SFDPart[]
----@field partCount integer
----@field fileName string
----@field gameName string
----@field equipmentLayer integer
----@field itemID string
----@field jacketUnderBelt boolean
----@field canEquip boolean
----@field canScript boolean
----@field colorPalette string
-
----@class SFDPart : table
----@field type integer
----@field itemID string
----@field textureCount integer
----@field textures love.ImageData[]
-
---
---
-
+print("loading libraries")
 Bit = require("bit")
 
----@param s string
----@param separator string
----@return string[]
-function StringSplit(s, separator)
-    local items = {}
-
-    for item in string.gmatch(s, "([^".. separator .."]+)") do
-        table.insert(items, item)
+local function loadCLI(arguments)
+    local function printf(s, ...)
+        print(string.format(s, ...))
     end
 
-    return items
-end
-
-local ByteStream = require("class.byte_stream")
-local INIHandler = require("class.ini_handler")
-local PathUtility = require("class.path_utility")
-
----@param str string
----@param ... any
-local function printf(str, ...)
-    print(string.format(str, ...))
-end
-
----@param imageData love.ImageData
----@return boolean
-local function isImageDataEmpty(imageData)
-    local imageWidth = imageData:getWidth()
-    local imageHeight = imageData:getHeight()
-
-    for i=0, imageWidth * imageHeight - 1 do
-        local r, g, b, a = imageData:getPixel(i % imageWidth, math.floor(i / imageHeight))
-
-        if (a > 0) then
-            return false
-        end
-    end
-
-    return true
-end
-
----@param filePath string
----@param item SFDItem
-local function exportSFDItem(filePath, item)
-    printf("Exporting ITEM: %s", filePath)
-
-    local stream = ByteStream.new()
-
-    stream:writeString(item.fileName)
-    stream:writeString(item.gameName)
-    stream:writeInt32(item.equipmentLayer)
-    stream:writeString(item.itemID)
-    stream:writeBoolean(item.jacketUnderBelt)
-    stream:writeBoolean(item.canEquip)
-    stream:writeBoolean(item.canScript)
-    stream:writeString(item.colorPalette)
-
-    local itemWidth = nil
-    local itemHeight = nil
-    local itemColors = {}
-
-    for i=1, item.partCount do
-        local part = item.parts[i - 1]
-
-        for j=1, part.textureCount do
-            local texture = part.textures[j - 1]
-
-            if (texture) then
-                if (itemWidth and itemHeight and (itemWidth ~= texture:getWidth() or itemHeight ~= texture:getHeight())) then
-                    error(string.format("Different width (%d) or height (%d) at part %d, texture %d", itemWidth, itemHeight, i, j))
-                    return
-                end
-
-                itemWidth = texture:getWidth()
-                itemHeight = texture:getHeight()
-
-                texture:mapPixel(function(x, y, r, g, b, a)
-                    for k, color in ipairs(itemColors) do
-                        if (color.r == r and color.g == g and color.b == b and color.a == a) then
-                            return r, g, b, a
-                        end
-                    end
-
-                    table.insert(itemColors, {r = r, g = g, b = b, a = a})
-                    return r, g, b, a
-                end)
-
-                if (#itemColors > 255) then
-                    error(string.format("256th color at part %d, texture %d", i - 1, j - 1))
-                    return
-                end
-            end
-        end
-    end
-
-    if (not itemWidth or not itemHeight) then
-        error("failed to detect textures width or height")
-    end
-
-    stream:writeInt32(itemWidth)
-    stream:writeInt32(itemHeight)
-    stream:writeByte(#itemColors)
-
-    --printf("\twritting color table: %d", #itemColors)
-
-    for i, color in ipairs(itemColors) do
-        --printf("\t- #%d %03d %03d %03d %03d", i - 1, color.r * 255, color.g * 255, color.b * 255, color.a * 255)
-
-        stream:writeByte(color.r * 255)
-        stream:writeByte(color.g * 255)
-        stream:writeByte(color.b * 255)
-        stream:writeByte(color.a * 255)
-    end
-
-    stream:writeInt32(item.partCount)
-    stream:writeByte(0)
-
-    --printf("\tWritting parts: %d", item.partCount)
-    --printf("\t- width: %d, height: %d", itemWidth, itemHeight)
-
-    for i=1, item.partCount do
-        local part = item.parts[i - 1]
-
-        stream:writeInt32(part.type)
-        stream:writeInt32(part.textureCount)
-
-        local textureEmptyCount = 0
-
-        for j=1, part.textureCount do
-            local texture = part.textures[j - 1]
-
-            if (texture) then
-                stream:writeBoolean(true)
-
-                local lastColorIndex = 0
-                texture:mapPixel(function(x, y, r, g, b, a)
-                     for k, color in pairs(itemColors) do
-                        if (color.r == r and color.g == g and color.b == b and color.a == a) then
-                            if (lastColorIndex ~= k) then
-                                stream:writeBoolean(false)
-                                stream:writeByte(k - 1)
-    
-                                lastColorIndex = k
-                            else
-                                stream:writeBoolean(true)
-                            end
-    
-                            return r, g, b, a
-                        end
-                    end
-    
-                    return r, g, b, a
-                end)
-
-                stream:writeByte(0)
-            else
-                textureEmptyCount = textureEmptyCount + 1
-
-                stream:writeBoolean(false)
-            end
-        end
-
-        --printf("\t- - #%d, textures: %d/%d", part.type, part.textureCount - textureEmptyCount, part.textureCount)
-    end
-
-    local status, message = love.filesystem.write(filePath, stream.data)
-    if (not status) then
-        error(message)
-    end
-end
-
----@param filePath string
----@return SFDItem
-local function importSFDItem(filePath)
-    printf("Importing ITEM: %s", filePath)
-
-    local fileContents, fileBytes = love.filesystem.read(filePath)
-
-    if (not fileContents) then
-        error(fileBytes)
-    end
-
-    local stream = ByteStream.new()
-    stream:setData(fileContents)
-
-    local item = {}
-    item.parts = {}
-    item.fileName = stream:readString()
-    item.gameName = stream:readString()
-    item.equipmentLayer = stream:readInt32()
-    item.itemID = stream:readString()
-    item.jacketUnderBelt = stream:readBoolean()
-    item.canEquip = stream:readBoolean()
-    item.canScript = stream:readBoolean()
-    item.colorPalette = stream:readString()
-
-    local itemWidth = stream:readInt32()
-    local itemHeight = stream:readInt32()
-    local itemTexturePixelCount = itemWidth * itemHeight
-
-    local colorCount = stream:readByte()
-    local colors = {}
-
-    --printf("\tReading color table: %d", colorCount)
-
-    for i=1, colorCount do
-        local r, g, b, a = stream:readByte(), stream:readByte(), stream:readByte(), stream:readByte()
-
-        --printf("\t- #%d %03d %03d %03d %03d", i - 1, r, g, b, a)
-
-        colors[i] = {r / 255, g / 255, b / 255, a / 255}
-    end
-
-    item.partCount = stream:readInt32()
-    stream:readByte()
-
-    --printf("\tReading parts: %d", item.partCount)
-    --printf("\t- width: %d, height: %d", itemWidth, itemHeight)
-
-    for i=1, item.partCount do
-        local part = {}
-        part.type = stream:readInt32()
-        part.itemID = item.itemID
-        part.textureCount = stream:readInt32()
-        part.textures = {}
-
-        local textureEmptyCount = 0
-
-        for j=1, part.textureCount do
-            if (stream:readBoolean()) then
-                local lastColor = {0, 0, 0, 0}
-
-                local texture = love.image.newImageData(itemWidth, itemHeight)
-
-                for k=0, itemTexturePixelCount - 1 do
-                    if (not stream:readBoolean()) then
-                        local colorIndex = stream:readByte()
-                        lastColor = colors[colorIndex + 1]
-                    end
-
-                    texture:setPixel(k % itemWidth, math.floor(k / itemHeight), lastColor[1], lastColor[2], lastColor[3], lastColor[4])
-                end
-                stream:readByte()
-
-                if (not isImageDataEmpty(texture)) then
-                    part.textures[j - 1] = texture
-                else
-                    textureEmptyCount = textureEmptyCount + 1
-                end
-            else
-                textureEmptyCount = textureEmptyCount + 1
-            end
-        end
-
-        --printf("\t- - #%d, textures: %d/%d", part.type, part.textureCount - textureEmptyCount, part.textureCount)
-
-        item.parts[i - 1] = part
-    end
-
-    return item
-end
-
----@param filePath string
----@param item SFDItem
-local function exportSFDItemFolder(filePath, item)
-    printf("Exporting FOLDER: %s", filePath)
-
-    if (not PathUtility.isDirectory(filePath)) then
-        error("Directory does not exist")
-        return
-    end
-
-    local iniFilePath = PathUtility.add(filePath, item.fileName .. ".ini")
-
-    local iniHandler = INIHandler.new()
-    iniHandler:set("GameName", item.gameName)
-    iniHandler:setNumber("EquipmentLayer", item.equipmentLayer)
-    iniHandler:set("ItemID", item.itemID)
-    iniHandler:setBoolean("JacketUnderBelt", item.jacketUnderBelt)
-    iniHandler:setBoolean("CanEquip", item.canEquip)
-    iniHandler:setBoolean("CanScript", item.canScript)
-    iniHandler:set("ColorPalette", item.colorPalette)
-    iniHandler:saveFile(iniFilePath)
-
-    for i=1, item.partCount do
-        local part = item.parts[i - 1]
-
-        for j=1, part.textureCount do
-            local texture = part.textures[j - 1]
-
-            if (texture) then
-                texture:encode("png", PathUtility.add(filePath, string.format("%d_%d.png", i - 1, j - 1)))
-            end
-        end
-    end
-end
-
----@param iniFilePath string
----@return SFDItem
-local function importSFDItemFolder(iniFilePath)
-    printf("Importing FOLDER: %s", iniFilePath)
-
-    if (not PathUtility.isFile(iniFilePath) or PathUtility.getExtension(iniFilePath) ~= "ini") then
-        error("INI file does not exist")
-    end
-
-    local itemFolderPath = PathUtility.getDirectoryPath(iniFilePath)
-
-    local iniHandler = INIHandler.new()
-    iniHandler:readFile(iniFilePath)
-
-    local item = {}
-    item.fileName = PathUtility.getNameWithoutExtension(iniFilePath)
-    item.gameName = iniHandler:get("GameName")
-    item.equipmentLayer = iniHandler:getNumber("EquipmentLayer")
-    item.itemID = iniHandler:get("ItemID")
-    item.jacketUnderBelt = iniHandler:getBoolean("JacketUnderBelt")
-    item.canEquip = iniHandler:getBoolean("CanEquip")
-    item.canScript = iniHandler:getBoolean("CanScript")
-    item.colorPalette = iniHandler:get("ColorPalette")
-
-    item.parts = {}
-    item.partCount = 0
-
-    for i=0, 5 do
-        item.parts[i] = {}
-        item.parts[i].type = i
-        item.parts[i].itemID = item.itemID
-        item.parts[i].textures = {}
-        item.parts[i].textureCount = 0
-    end
-
-    local pathItems = PathUtility.getFileItems(itemFolderPath)
-    for i, pathItem in ipairs(pathItems) do
-        local pathItemExtension = PathUtility.getExtension(pathItem)
-        local pathItemName = PathUtility.getNameWithoutExtension(pathItem)
-
-        if (pathItemExtension == "png") then
-            local pathItemNameSplit = StringSplit(pathItemName, "_")
-            local texture = love.image.newImageData(pathItem)
-
-            local partIndex = tonumber(pathItemNameSplit[1])
-            local textureID = tonumber(pathItemNameSplit[2])
-
-            if (partIndex) then
-                if (textureID and not isImageDataEmpty(texture)) then
-                    if (item.parts[partIndex] and not item.parts[partIndex].textures[textureID]) then
-                        item.parts[partIndex].textures[textureID] = texture
-                    end
-
-                    item.parts[partIndex].textureCount = math.max(item.parts[partIndex].textureCount, textureID + 1)
-                end
-
-                item.partCount = math.max(item.partCount, partIndex + 1)
-            end
-        end
-    end
-
-    return item
-end
-
----@type love.load
-function love.load(arguments)
     local startTime = love.timer.getTime()
 
-    local outputPath = [[./Output/]]
-    local inputPath = [[./Input/]]
+    local outputPath = "./Output/"
+    local inputPath = "./Input/"
     local action
 
     for i=1, #arguments do
@@ -438,7 +58,7 @@ function love.load(arguments)
         love.filesystem.createDirectory(outputPath)
         love.filesystem.createDirectory(inputPath)
 
-        local inputItems = PathUtility.getFileItems(inputPath)
+        local inputItems = PathUtility.getFiles(inputPath)
 
         if (action == "item") then
             printf("converting FOLDERS to ITEMS...", #inputItems)
@@ -448,14 +68,16 @@ function love.load(arguments)
                     local itemExtension = PathUtility.getExtension(itemPath)
                     local itemDirectory = PathUtility.getDirectoryPath(itemPath)
 
+                    local itemOutputDirectories = PathUtility.getDirectories(string.gsub(itemPath, inputPath, outputPath))
+                    local itemOutputDirectory = table.concat(itemOutputDirectories, "/", 1, #itemOutputDirectories - 2)
+
                     if (itemExtension == "ini") then
-                        local SFDItem = importSFDItemFolder(itemPath)
+                        local sfditem = SFDItem.fromFolder(itemDirectory, itemPath)
 
-                        local itemOutputDirectoryPath = PathUtility.getDirectoryPath(string.gsub(itemDirectory, inputPath, outputPath))
-                        local itemOutputPath = PathUtility.add(itemOutputDirectoryPath, SFDItem.fileName .. ".item")
-                        love.filesystem.createDirectory(itemOutputDirectoryPath)
+                        love.filesystem.createDirectory(itemOutputDirectory)
 
-                        exportSFDItem(itemOutputPath, SFDItem)
+                        print("SFDItem.toBinary:", itemOutputDirectory, sfditem.fileName)
+                        SFDItem.toBinary(sfditem, itemOutputDirectory)
                     end
                 end)
 
@@ -470,15 +92,16 @@ function love.load(arguments)
             for i, itemPath in ipairs(inputItems) do
                 local status, message = pcall(function()
                     local itemExtension = PathUtility.getExtension(itemPath)
+                    local itemDirectory = PathUtility.getDirectoryPath(itemPath)
 
                     if (itemExtension == "item") then
-                        local SFDItem = importSFDItem(itemPath)
+                        local sfditem = SFDItem.fromBinary(ByteStream.fromFile(itemPath))
 
-                        local itemOutputPath = string.gsub(itemPath, inputPath, outputPath)
-                        local itemOutputDirectoryPath = PathUtility.add(PathUtility.getDirectoryPath(itemOutputPath), SFDItem.fileName)
-                        love.filesystem.createDirectory(itemOutputDirectoryPath)
+                        local itemOutputPath = PathUtility.add(string.gsub(itemDirectory, inputPath, outputPath), sfditem.fileName)
+                        love.filesystem.createDirectory(itemOutputPath)
 
-                        exportSFDItemFolder(itemOutputDirectoryPath, SFDItem)
+                        print("SFDItem.toFolder:", itemOutputPath, sfditem.fileName)
+                        SFDItem.toFolder(sfditem, itemOutputPath)
                     end
                 end)
 
@@ -493,14 +116,16 @@ function love.load(arguments)
             for i, itemPath in ipairs(inputItems) do
                 local status, message = pcall(function()
                     local itemExtension = PathUtility.getExtension(itemPath)
+                    local itemDirectory = PathUtility.getDirectoryPath(itemPath)
 
                     if (itemExtension == "item") then
-                        local SFDItem = importSFDItem(itemPath)
+                        local sfditem = SFDItem.fromBinary(ByteStream.fromFile(itemPath))
 
-                        local itemOutputPath = string.gsub(itemPath, inputPath, outputPath)
-                        love.filesystem.createDirectory(PathUtility.getDirectoryPath(itemOutputPath))
+                        local itemOutputPath = string.gsub(itemDirectory, inputPath, outputPath)
+                        love.filesystem.createDirectory(itemOutputPath)
 
-                        exportSFDItem(itemOutputPath, SFDItem)
+                        print("SFDItem.toBinary:", itemOutputPath, sfditem.fileName)
+                        SFDItem.toBinary(sfditem, itemOutputPath)
                     end
                 end)
 
@@ -517,5 +142,109 @@ function love.load(arguments)
     local endTime = love.timer.getTime()
 
     printf("finished in %.2fms", (endTime - startTime) * 1000)
-    love.event.quit(0)
+end
+
+App = {}
+
+---@type love.load
+function love.load(arguments)
+    print("loading classes")
+
+    require("class.static.class_utility")
+    require("class.static.path_utility")
+    require("class.static.string_utility")
+
+    local items = PathUtility.getFiles("class", "%.lua$")
+    for _, path in ipairs(items) do
+        -- convert the path ("folder/subFolder/file.lua") to a require path (folder.subFolder.file)
+        local requirePath = string.gsub(string.gsub(path, "/", "."), "%.lua", "")
+
+        require(requirePath)
+    end
+
+    if (not (love.graphics and love.window)) then
+        loadCLI(arguments)
+        love.event.quit(0)
+        return
+    end
+
+    App = {}
+    App.version = "2.0"
+
+    print("loading data")
+    App.colors = require("asset.data.colors")
+    App.palettes = require("asset.data.palettes")
+
+    print("loading animations")
+    App.animations = {
+        SFDAnimation.fromText("asset/animation/FullIdle.txt"),
+        SFDAnimation.fromText("asset/animation/FullCrouch.txt")
+    }
+
+    print("loading shader")
+    App.paletteShader = love.graphics.newShader("palette.glsl")
+
+    print("starting")
+    love.graphics.setFont(love.graphics.newFont(18))
+    love.graphics.setDefaultFilter("nearest", "nearest")
+    love.graphics.setLineStyle("rough")
+    love.graphics.setBackgroundColor(1, 0, 1, 1)
+
+    App.equipment = SFDEquipment.new()
+    App.panel = UIAppPanel.new()
+
+    App.panel.width = love.graphics.getWidth()
+    App.panel.height = love.graphics.getHeight()
+end
+
+---@type love.resize
+function love.resize(width, height)
+    App.panel.width = width
+    App.panel.height = height
+end
+
+---@type love.mousemoved
+function love.mousemoved(x, y, dx, dy)
+    App.panel:mousemoved(x, y, dx, dy)
+end
+
+---@type love.mousepressed
+function love.mousepressed(x, y, button)
+    App.panel:mousepressed(x, y, button)
+end
+
+---@type love.mousereleased
+function love.mousereleased(x, y, button)
+    App.panel:mousereleased(x, y, button)
+end
+
+---@type love.keypressed
+function love.keypressed(key)
+    App.panel:keypressed(key)
+end
+
+---@type love.keyreleased
+function love.keyreleased(key)
+    App.panel:keyreleased(key)
+end
+
+---@type love.textinput
+function love.textinput(text)
+    App.panel:textinput(text)
+end
+
+---@type love.update
+function love.update(deltaTime)
+    App.panel:update(deltaTime)
+end
+
+---@type love.draw
+function love.draw()
+    App.panel:draw()
+
+    local font = love.graphics.getFont()
+    local textWidth = font:getWidth(App.version)
+    local textHeight = font:getHeight()
+    love.graphics.setColor(0, 0, 0, 0.2)
+    love.graphics.print(App.version, love.graphics.getWidth() - 2 - textWidth, love.graphics.getHeight() - textHeight - 2)
 end
