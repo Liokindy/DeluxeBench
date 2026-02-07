@@ -1,4 +1,4 @@
-# SFDItemTool
+# DeluxeBench
 
 > [!NOTE]
 > This tool is currently in development to get reworked, some of the content of this README may not be correct compared to the current available release!

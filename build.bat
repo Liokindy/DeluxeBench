@@ -1,4 +1,4 @@
-SET "NAME=SFDItemTool"
+SET "NAME=DeluxeBench"
 
 SET "LOVE_PATH=F:\Program Files\LOVE\"
 SET "FUSED_PATH=.\release\fused\"

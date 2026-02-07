@@ -1,6 +1,6 @@
 ---@type love.conf
 function love.conf(t)
-    t.identity = "SFDItemTool"
+    t.identity = "DeluxeBench"
     t.version = "11.5"
 
     t.window.resizable = true
