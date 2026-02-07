@@ -1,13 +1,15 @@
 # SFDItemTool
 
-A light weight and simple tool that can read [Superfighters Deluxe's](https://store.steampowered.com/app/855860/Superfighters_Deluxe/) `.item` files.
-
 > [!NOTE]
-> Superfighters Deluxe's `.item` files are not efficiently stored, they contain many completely transparent texture data. This results in a heavy size reduction when those textures are skipped, with SFD's 213 default items the total size is decreased by **76%** (`5855428 bytes` or `~5.58MB` down to `1409159 bytes` or `~1.34MB`).
->
-> This tool will automatically detect and skip completely transparent textures.
+> This tool is currently in development to get reworked, some of the content of this README may not be correct compared to the current available release!
 
-### Usage
+A light weight and simplistic tool for creating content (items and animations) for [Superfighters Deluxe](https://store.steampowered.com/app/855860/Superfighters_Deluxe/), made with [LÖVE 2D](https://love2d.org/).
+
+### CREDITS
+
+- [Portable File Dialogs](https://github.com/samhocevar/portable-file-dialogs) library by ["Sam Hocevar"](https://github.com/samhocevar).
+
+### LEGACY CLI USAGE
 
 1. Download the [latest release](https://github.com/Liokindy/SFDItemTool/releases).
 
@@ -18,7 +20,7 @@ A light weight and simple tool that can read [Superfighters Deluxe's](https://st
 >
 > The Windows release contains a shortcut that will point to it.
 
-### Options
+Options:
 
 ```
 	-input [path]

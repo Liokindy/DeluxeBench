@@ -16,13 +16,16 @@ function Instance.new(metaTable)
     return self
 end
 
+---@param self Instance
+---@return string
 function Instance.type(self)
     return self.__type
 end
 
+---@param self table
+---@param typeName string
+---@return boolean
 function Instance.typeOf(self, typeName)
-    ---@cast self table
-    ---@cast typeName string
     if (self.type and self:type() == typeName) then
         return true
     end

@@ -1,5 +1,5 @@
 ---@class SFDAnimation : Instance
----@field getTotalTime fun(self: SFDAnimation): integer
+---@field getTotalTime fun(self: SFDAnimation): number
 ---@field name string
 ---@field frames SFDAnimationFrame[]
 
@@ -17,9 +17,9 @@ function SFDAnimation.new()
     return self
 end
 
+---@param self SFDAnimation
+---@return integer
 function SFDAnimation.getTotalTime(self)
-    ---@cast self SFDAnimation
-
     local result = 0
 
     for _, frame in ipairs(self.frames) do
@@ -83,11 +83,15 @@ function SFDAnimation.fromText(path)
     local lines = {}
     local result = SFDAnimation.new()
     local frame = nil
-    
+
     result.name = PathUtility.getNameWithoutExtension(path)
 
     for line in love.filesystem.lines(path) do
-        local lineBits = StringUtility.split(line, " ")
+        local lineBits = {}
+
+        for bit in string.gmatch(line, "([^ ]+)") do
+            table.insert(lineBits, bit)
+        end
 
         if (#lineBits >= 1) then
             lineBits[1] = string.lower(lineBits[1])

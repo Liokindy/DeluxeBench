@@ -1,23 +1,27 @@
 ---@class ByteStream : Instance
 ---@field data string
----@field index integer
+---@field index number
 ---@field setData fun(self: ByteStream, newData: string)
 ---@field write fun(self: ByteStream, byteData: string)
----@field read fun(self: ByteStream, byteCount: integer): string
----@field writeUInt32 fun(self: ByteStream, value: integer)
----@field readUInt32 fun(self: ByteStream): integer
----@field writeInt32 fun(self: ByteStream, value: integer)
----@field readInt32 fun(self: ByteStream): integer
+---@field read fun(self: ByteStream, byteCount: number): string
+---@field writeUInt32 fun(self: ByteStream, value: number)
+---@field readUInt32 fun(self: ByteStream): number
+---@field writeInt32 fun(self: ByteStream, value: number)
+---@field readInt32 fun(self: ByteStream): number
 ---@field writeFloat fun(self: ByteStream, value: number)
 ---@field readFloat fun(self: ByteStream): number
 ---@field writeBoolean fun(self: ByteStream, value: boolean)
 ---@field readBoolean fun(self: ByteStream): boolean
----@field writeByte fun(self: ByteStream, value: integer)
----@field readByte fun(self: ByteStream): integer
+---@field writeByte fun(self: ByteStream, value: number)
+---@field readByte fun(self: ByteStream): number
 ---@field writeString fun(self: ByteStream, value: string)
 ---@field readString fun(self: ByteStream): string
----@field write7BitEncodedInt fun(self: ByteStream, value: integer)
----@field read7BitEncodedInt fun(self: ByteStream): integer
+---@field write7BitEncodedInt fun(self: ByteStream, value: number)
+---@field read7BitEncodedInt fun(self: ByteStream): number
+---@field writeColorTable fun(self: ByteStream, value: Color[])
+---@field readColorTable fun(self: ByteStream): Color[]
+---@field writeColor fun(self: ByteStream, value: Color)
+---@field readColor fun(self: ByteStream): Color
 
 ByteStream = {}
 ByteStream.__type = "ByteStream"
@@ -34,127 +38,168 @@ function ByteStream.new()
 end
 
 ---@param path string
----@return ByteStream
+---@return ByteStream?
 function ByteStream.fromFile(path)
-    local self = ByteStream.new()
+    local fileInfo = love.filesystem.getInfo(path)
 
-    self:setData(love.filesystem.read("string", path) --[[@as string]])
+    if (fileInfo and fileInfo.type == "file") then
+        local fileData, fileSize = love.filesystem.read("string", path, nil)
 
-    return self
+        if (fileData and fileSize) then
+            local self = ByteStream.new()
+
+            self:setData(love.filesystem.read("string", path) --[[@as string]])
+            return self
+        end
+    end
 end
 
+---@param self ByteStream
+---@param data string
 function ByteStream.setData(self, data)
-    ---@cast self ByteStream
-    ---@cast data string
-
     self.data = data
     self.index = 1
 end
 
+---@param self ByteStream
+---@param data string
 function ByteStream.write(self, data)
-    ---@cast self ByteStream
-    ---@cast data string
-
     self.data = self.data .. data
     self.index = self.index + #data
 end
 
+---@param self ByteStream
+---@param byteCount number
+---@return string
 function ByteStream.read(self, byteCount)
-    ---@cast self ByteStream
-    ---@cast byteCount integer
-
     local byteData = string.sub(self.data, self.index, self.index + byteCount - 1)
     self.index = self.index + byteCount
 
     return byteData
 end
 
+---@param self ByteStream
+---@param value number
 function ByteStream.writeUInt32(self, value)
-    ---@cast self ByteStream
-    ---@cast value integer
-
     self:write(love.data.pack("string", "I4", value) --[[@as string]])
 end
 
+---@param self ByteStream
+---@return number
 function ByteStream.readUInt32(self)
-    ---@cast self ByteStream
-
-    return love.data.unpack("I4", self:read(love.data.getPackedSize("I4"))) --[[@as integer]]
+    local value, _ = love.data.unpack("I4", self:read(love.data.getPackedSize("I4")))
+    return value --[[@as number]]
 end
 
+---@param self ByteStream
+---@param value number
 function ByteStream.writeInt32(self, value)
-    ---@cast self ByteStream
-    ---@cast value integer
-
     self:write(love.data.pack("string", "i4", value) --[[@as string]])
 end
 
+---@param self ByteStream
+---@return number
 function ByteStream.readInt32(self)
-    ---@cast self ByteStream
-
-    return love.data.unpack("i4", self:read(love.data.getPackedSize("i4"))) --[[@as integer]]
+    local value, _ = love.data.unpack("i4", self:read(love.data.getPackedSize("i4")))
+    return value --[[@as number]]
 end
 
-function ByteStream.writeFloat(self, value)
-    ---@cast self ByteStream
-    ---@cast value number
+---@param self ByteStream
+---@param value Color[]
+function ByteStream.writeColorTable(self, value)
+    self:writeByte(#value)
 
+    for i=1, math.min(255, #value) do
+        self:writeColor(value[i])
+    end
+end
+
+---@param self ByteStream
+---@return Color[]
+function ByteStream.readColorTable(self)
+    local length = self:readByte()
+    local value = {}
+
+    for i=1, length do
+        value[i] = self:readColor()
+    end
+
+    return value
+end
+
+---@param self ByteStream
+---@param value Color
+function ByteStream.writeColor(self, value)
+    self:writeByte(value[1] * 255)
+    self:writeByte(value[2] * 255)
+    self:writeByte(value[3] * 255)
+    self:writeByte((value[4] or 1) * 255)
+end
+
+---@param self ByteStream
+---@return Color
+function ByteStream.readColor(self)
+    local mult = 1 / 255
+    return {self:readByte() * mult, self:readByte() * mult, self:readByte() * mult, self:readByte() * mult}
+end
+
+---@param self ByteStream
+---@param value number
+function ByteStream.writeFloat(self, value)
     self:write(love.data.pack("string", "f", value) --[[@as string]])
 end
 
+---@param self ByteStream
+---@return number
 function ByteStream.readFloat(self)
-    ---@cast self ByteStream
-
-    return love.data.unpack("f", self:read(love.data.getPackedSize("f"))) --[[@as number]]
+    local value, _ = love.data.unpack("f", self:read(love.data.getPackedSize("f"))) 
+    return value --[[@as number]]
 end
 
+---@param self ByteStream
+---@param value boolean
 function ByteStream.writeBoolean(self, value)
-    ---@cast self ByteStream
-    ---@cast value boolean
-
     self:writeByte((value == true and 1 or 0))
 end
 
+---@param self ByteStream
+---@return boolean
 function ByteStream.readBoolean(self)
-    ---@cast self ByteStream
-
     return (self:readByte() ~= 0)
 end
 
+---@param self ByteStream
+---@param value number
 function ByteStream.writeByte(self, value)
-    ---@cast self ByteStream
-    ---@cast value integer
-
     self:write(love.data.pack("string", "B", value) --[[@as string]])
 end
 
+---@param self ByteStream
+---@return number
 function ByteStream.readByte(self)
-    ---@cast self ByteStream
-
-    return love.data.unpack("B", self:read(love.data.getPackedSize("B"))) --[[@as number]]
+    local value, _ = love.data.unpack("B", self:read(love.data.getPackedSize("B"))) 
+    return value --[[@as number]]
 end
 
+---@param self ByteStream
+---@param value string
 function ByteStream.writeString(self, value)
-    ---@cast self ByteStream
-    ---@cast value string
-
     self:write7BitEncodedInt(#value)
     self:write(value)
 end
 
+---@param self ByteStream
+---@return string
 function ByteStream.readString(self)
-    ---@cast self ByteStream
-
     local length = self:read7BitEncodedInt()
     local str = self:read(love.data.getPackedSize(string.format("c%d", length)))
 
     return str
 end
 
+---@param self ByteStream
+---@param value number
 function ByteStream.write7BitEncodedInt(self, value)
-    ---@cast self ByteStream
-    ---@cast value integer
-
     local num = love.data.unpack("i4", love.data.pack("string", "i4", value)) --[[@as number]]
     while (num >= 128) do
         self:writeByte(Bit.bor(num, 128))
@@ -165,9 +210,9 @@ function ByteStream.write7BitEncodedInt(self, value)
     self:writeByte(num)
 end
 
+---@param self ByteStream
+---@return number
 function ByteStream.read7BitEncodedInt(self)
-    ---@cast self ByteStream
-
     local count = 0
     local shift = 0
     local b
@@ -177,7 +222,7 @@ function ByteStream.read7BitEncodedInt(self)
         self.index = self.index + love.data.getPackedSize("B")
 
         if (b == -1) then
-            return
+            return 0
         end
 
         count = Bit.bor(count, Bit.lshift(Bit.band(b, 0x7F), shift))
@@ -188,7 +233,7 @@ function ByteStream.read7BitEncodedInt(self)
         end
 
         if (shift >= 35) then
-            return
+            return 0
         end
     end
 end

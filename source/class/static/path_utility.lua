@@ -1,33 +1,25 @@
 -- love.filesystem likes Unix paths
 
 PathUtility = {}
-PathUtility.systemDirectorySeparator = string.sub(package.config, 1, 1)
 
 ---@param path string
-function PathUtility.trim(path)
-    return PathUtility.trimEnd(PathUtility.trimStart(path))
-end
-
----@param path string
+---@return string
 function PathUtility.trimStart(path)
-    if (string.sub(path, 1, 1) == ".") then
-        path = string.sub(path, 2)
-    end
-
-    if (string.sub(path, 1, string.len("/")) == "/") then
-        path = string.sub(path, string.len("/") + 1)
-    end
-
-    return path
+    local s = string.gsub(string.gsub(path, "^%./", ""), "^/", "")
+    return s
 end
 
 ---@param path string
+---@return string
 function PathUtility.trimEnd(path)
-    if (string.sub(path, -string.len("/")) == "/") then
-        path = string.sub(path, 1, string.len(path) - string.len("/"))
-    end
+    local s = string.gsub(path, "/$", "")
+    return s
+end
 
-    return path
+---@param path string
+---@return string
+function PathUtility.trim(path)
+    return PathUtility.trimStart(PathUtility.trimEnd(path))
 end
 
 ---@param path string
@@ -35,7 +27,7 @@ end
 function PathUtility.add(path, ...)
     path = PathUtility.trimEnd(path)
 
-    for i, subPath in ipairs({...}) do
+    for _, subPath in ipairs({...}) do
         path = path .. "/" .. subPath
     end
 
@@ -43,52 +35,52 @@ function PathUtility.add(path, ...)
 end
 
 ---@param path string
+---@return string
 function PathUtility.unixify(path)
-    path = string.gsub(path, PathUtility.systemDirectorySeparator, "/")
+    path = string.gsub(path, "\\", "/")
+    path = string.gsub(path, "/+", "/")
+    path = string.gsub(path, "^([A-Za-z]):/", "/%1/") -- drive letters on windows
+
     return path
 end
 
 ---@param path string
+---@return string
 function PathUtility.getNameWithoutExtension(path)
-    local itemName = PathUtility.getName(path)
-    local itemExtension = PathUtility.getExtension(path)
-
-    return string.sub(itemName, 1, string.len(itemName) - string.len(itemExtension) - 1)
+    local s = PathUtility.getName(path)
+    return string.match(s, "^(.*)%.") or s
 end
 
 ---@param path string
+---@return string
 function PathUtility.getName(path)
     path = PathUtility.trimEnd(path)
-
-    local items = StringUtility.split(path, "/")
-
-    return items[#items]
+    return string.match(path, "([^/]+)$") or ""
 end
 
 ---@param path string
+---@return string
 function PathUtility.getExtension(path)
-    local itemName = PathUtility.getName(path)
-    local itemExtensions = StringUtility.split(itemName, ".")
-
-    return itemExtensions and itemExtensions[#itemExtensions]
+    return string.match(path, "%.([^%.]+)$") or ""
 end
 
 ---@param path string
 ---@return string[]
 function PathUtility.getDirectories(path)
     path = PathUtility.trim(path)
-    path = path .. "/"
 
-    local items = StringUtility.split(path, "/")
+    local directories = {}
+    for directory in path:gmatch("[^/]+") do
+        table.insert(directories, directory)
+    end
 
-    return items
+    return directories
 end
 
 ---@param path string
 ---@return string
 function PathUtility.getDirectoryPath(path)
-    local items = PathUtility.getDirectories(path)
-    return table.concat(items, "/", 1, #items - 1)
+    return string.match(path, "^(.*)/[^/]+$") or ""
 end
 
 ---@param path string

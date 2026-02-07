@@ -1,25 +1,31 @@
 ---@class UIElement : Instance
 ---@field parent UIElement?
+---@field children UIElement[]
 ---@field x number
 ---@field y number
 ---@field width number
 ---@field height number
----@field borderColor Color
----@field backgroundColor Color
----@field focus integer
+---@field background boolean
+---@field border boolean
+---@field addChild fun(self: UIElement, ...: UIElement)
+---@field removeChild fun(self: UIElement, ...: UIElement)
 ---@field getDrawX fun(self: UIElement): number
 ---@field getDrawY fun(self: UIElement): number
+---@field getOverlap fun(self: UIElement, x: number, y: number): UIElement?
+---@field textinput fun(self: UIElement, text: string)
 ---@field keypressed fun(self: UIElement, key: love.KeyConstant)
 ---@field keyreleased fun(self: UIElement, key: love.KeyConstant)
----@field textinput fun(self: UIElement, text: string)
 ---@field mousepressed fun(self: UIElement, x: number, y: number, button: number)
 ---@field mousereleased fun(self: UIElement, x: number, y: number, button: number)
 ---@field mousemoved fun(self: UIElement, x: number, y: number, dx: number, dy: number)
+---@field wheelmoved fun(self: UIElement, x: number, y: number)
 ---@field update fun(self: UIElement, deltaTime: number)
+---@field updatePosition fun(self: UIElement)
 ---@field draw fun(self: UIElement)
----@field drawBackground fun(self: UIElement, color: Color)
----@field drawBorder fun(self: UIElement, color: Color)
----@field inside fun(self: UIElement, x: number, y: number, width: number?, height: number?): boolean
+---@field drawChildren fun(self: UIElement)
+---@field drawBackground fun(self: UIElement)
+---@field inside fun(self: UIElement, x: number, y: number): boolean
+---@field pushScissor fun(self: UIElement): number, number, number, number
 
 UIElement = {}
 UIElement.__type = "UIElement"
@@ -35,37 +41,79 @@ function UIElement.new(x, y, width, height)
 
     self.x = x or 0
     self.y = y or 0
-    self.width = width or 50
-    self.height = height or 50
-    self.borderColor = {0, 0, 0, 1}
-    self.backgroundColor = {1, 1, 1, 1}
+    self.width = width or 1
+    self.height = height or 1
+    self.children = {}
+    self.background = true
+    self.border = true
+
+    self:updatePosition()
 
     return self
 end
 
-function UIElement.inside(self, x, y, width, height)
-    ---@cast self UIElement
-    ---@cast x number
-    ---@cast y number
-    ---@cast width number?
-    ---@cast height number?
+---@param self UIElement
+---@param ... UIElement
+function UIElement.addChild(self, ...)
+    local children = {...}
 
-    width = width or 0
-    height = height or 0
-
-    local minX = self:getDrawX()
-    local minY = self:getDrawY()
-    local maxX = minX + self.width
-    local maxY = minY + self.height
-
-    local posMaxX = x + width
-    local posMaxY = y + height
-
-    return (minX < posMaxX and maxX > x and minY < posMaxY and maxY > y)
+    for i, child in ipairs(children) do
+        table.insert(self.children, child)
+        child.parent = self
+    end
 end
 
+---@param self UIElement
+---@param ... UIElement
+function UIElement.removeChild(self, ...)
+    local children = {...}
+
+    for i, existingChild in ipairs(self.children) do
+        for j, removingChild in ipairs(children) do
+            if (existingChild == removingChild) then
+                existingChild.parent = nil
+                self.children[i] = nil
+            end
+        end
+    end
+end
+
+---@param self UIElement
+---@param x number
+---@param y number
+---@return UIElement?
+function UIElement.getOverlap(self, x, y)
+    for i=#self.children, 1, -1 do
+        local child = self.children[i]
+        if (child:inside(x, y)) then
+            return (child:getOverlap(x, y) or child)
+        end
+    end
+
+    if (self:inside(x, y)) then
+        return self
+    end
+
+    return nil
+end
+
+---@param self UIElement
+---@param x number
+---@param y number
+function UIElement.inside(self, x, y)
+    return (self:getDrawX() < x and self:getDrawX() + self.width > x and self:getDrawY() < y and self:getDrawY() + self.height > y)
+end
+
+---@param self UIElement
+function UIElement.updatePosition(self)
+    for i, child in ipairs(self.children) do
+        child:updatePosition()
+    end
+end
+
+---@param self UIElement
+---@return number
 function UIElement.getDrawX(self)
-    ---@cast self UIElement
     if (self.parent) then
         return self.parent:getDrawX() + self.x
     end
@@ -73,8 +121,9 @@ function UIElement.getDrawX(self)
     return self.x
 end
 
+---@param self UIElement
+---@return number
 function UIElement.getDrawY(self)
-    ---@cast self UIElement
     if (self.parent) then
         return self.parent:getDrawY() + self.y
     end
@@ -82,27 +131,124 @@ function UIElement.getDrawY(self)
     return self.y
 end
 
-function UIElement.keypressed(self) end
-function UIElement.keyreleased(self) end
-function UIElement.textinput(self) end
-function UIElement.mousepressed(self) end
-function UIElement.mousereleased(self) end
-function UIElement.mousemoved(self) end
-function UIElement.update(self) end
-function UIElement.draw(self)end
+---@param self UIElement
+---@param key love.KeyConstant
+function UIElement.keypressed(self, key)
+    for i, child in ipairs(self.children) do
+        child:keypressed(key)
+    end
+end
 
-function UIElement.drawBackground(self, color)
-    ---@cast self UIElement
-    ---@cast color Color
+---@param self UIElement
+---@param key love.KeyConstant
+function UIElement.keyreleased(self, key)
+    for i, child in ipairs(self.children) do
+        child:keyreleased(key)
+    end
+end
 
-    love.graphics.setColor(color)
+---@param self UIElement
+---@param text string
+function UIElement.textinput(self, text)
+    for i, child in ipairs(self.children) do
+        child:textinput(text)
+    end
+end
+
+---@param self UIElement
+---@param x number
+---@param y number
+---@param button number
+function UIElement.mousepressed(self, x, y, button)
+    for i, child in ipairs(self.children) do
+        child:mousepressed(x, y, button)
+    end
+end
+
+---@param self UIElement
+---@param x number
+---@param y number
+---@param button number
+function UIElement.mousereleased(self, x, y, button)
+    for i, child in ipairs(self.children) do
+        child:mousereleased(x, y, button)
+    end
+end
+
+---@param self UIElement
+---@param x number
+---@param y number
+---@param dx number
+---@param dy number
+function UIElement.mousemoved(self, x, y, dx, dy)
+    for i, child in ipairs(self.children) do
+        child:mousemoved(x, y, dx, dy)
+    end
+end
+
+---@param self UIElement
+---@param x number
+---@param y number
+function UIElement.wheelmoved(self, x, y)
+    for i, child in ipairs(self.children) do
+        child:wheelmoved(x, y)
+    end
+end
+
+---@param self UIElement
+---@param deltaTime number
+function UIElement.update(self, deltaTime)
+    for i, child in ipairs(self.children) do
+        child:update(deltaTime)
+    end
+end
+
+---@param self UIElement
+---@return number, number, number, number
+function UIElement.pushScissor(self)
+    local scissorX, scissorY, scissorWidth, scissorHeight = love.graphics.getScissor()
+
+    if (scissorWidth) then scissorWidth = math.max(scissorWidth, 0) end
+    if (scissorHeight) then scissorHeight = math.max(scissorHeight, 0) end
+
+    love.graphics.intersectScissor(self:getDrawX(), self:getDrawY(), math.max(self.width, 0), math.max(self.height, 0))
+    return scissorX, scissorY, scissorWidth, scissorHeight
+end
+
+---@param self UIElement
+function UIElement.draw(self)
+    local scissorX, scissorY, scissorWidth, scissorHeight = self:pushScissor()
+
+    self:drawBackground()
+    self:drawChildren()
+
+    love.graphics.setScissor(scissorX, scissorY, scissorWidth, scissorHeight)
+end
+
+---@param self UIElement
+function UIElement.drawBackground(self)
+    if (not self.background) then
+        return
+    end
+
+    love.graphics.setColor(App.theme.main)
     love.graphics.rectangle("fill", self:getDrawX(), self:getDrawY(), self.width, self.height)
+
+    if (not self.border) then
+        return
+    end
+    
+    local lineWidth = love.graphics.getLineWidth()
+    local lineOffset = lineWidth * 0.5
+    
+    love.graphics.setColor(App.theme.highlight)
+    love.graphics.rectangle("line", self:getDrawX() + lineOffset, self:getDrawY() + lineOffset, self.width - lineOffset * 2, self.height - lineOffset * 2)
 end
 
-function UIElement.drawBorder(self, color)
-    ---@cast self UIElement
-    ---@cast color Color
-
-    love.graphics.setColor(color)
-    love.graphics.rectangle("line", self:getDrawX(), self:getDrawY(), self.width, self.height)
+---@param self UIElement
+function UIElement.drawChildren(self)
+    for i, child in ipairs(self.children) do
+        child:draw()
+    end
 end
+

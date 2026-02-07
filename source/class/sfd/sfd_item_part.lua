@@ -1,6 +1,6 @@
 ---@class SFDItemPart : Instance
----@field getTexturesMaxIndex fun(self: SFDItemPart): integer
----@field typeID integer
+---@field getTexturesMaxIndex fun(self: SFDItemPart): number
+---@field typeID number
 ---@field itemID string
 ---@field textures love.ImageData[]
 ---@field images love.Image[]?
@@ -28,9 +28,9 @@ function SFDItemPart.new()
     return self
 end
 
+---@param self SFDItemPart
+---@return integer
 function SFDItemPart.getTexturesMaxIndex(self)
-    ---@cast self SFDItemPart
-
     local result = 0
 
     -- may have gaps

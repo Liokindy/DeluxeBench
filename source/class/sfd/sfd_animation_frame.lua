@@ -1,5 +1,5 @@
 ---@class SFDAnimationFrame : Instance
----@field time integer
+---@field time number
 ---@field parts SFDAnimationFramePart[]
 ---@field collisions SFDAnimationFrameCollision[]
 ---@field event string
@@ -20,8 +20,8 @@ function SFDAnimationFrame.new()
     return self
 end
 
+---@param self SFDAnimationFrame
+---@return boolean
 function SFDAnimationFrame.isRecoil(self)
-    ---@cast self SFDAnimationFrame
-
     return (string.match(self.event, "RECOIL") ~= nil)
 end

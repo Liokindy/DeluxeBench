@@ -5,7 +5,7 @@
 ---@field y number
 ---@field id SFDAnimationFrameCollisionID
 
----@alias SFDAnimationFrameCollisionID integer
+---@alias SFDAnimationFrameCollisionID number
 ---| 1 # LEGS
 ---| 2 # BODY
 ---| 3 # HEAD

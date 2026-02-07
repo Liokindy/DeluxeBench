@@ -2,9 +2,9 @@
 ---@field getName fun(self: SFDAnimationFramePart)
 ---@field calculateID fun(self: SFDAnimationFramePart)
 ---@field flip SFDAnimationFramePartFlip
----@field globalID integer
----@field typeID integer
----@field localID integer
+---@field globalID number
+---@field typeID number
+---@field localID number
 ---@field postFix string?
 ---@field rotation number
 ---@field scaleX number
@@ -12,7 +12,7 @@
 ---@field x number
 ---@field y number
 
----@alias SFDAnimationFramePartFlip integer
+---@alias SFDAnimationFramePartFlip number
 ---| 1 # None
 ---| 2 # Horizontal
 ---| 3 # Vertical
@@ -38,8 +38,9 @@ function SFDAnimationFramePart.new()
     return self
 end
 
+---@param self SFDAnimationFramePart
+---@return string
 function SFDAnimationFramePart.getName(self)
-    ---@cast self SFDAnimationFramePart
     local result = "???"
 
     if (self.globalID >= 0) then
@@ -59,7 +60,7 @@ function SFDAnimationFramePart.getName(self)
         elseif (self.localID == 9) then result = "SHEATHED_RIFLE"
         elseif (self.localID == 10) then result = "SHEATHED_MELEE"
         elseif (self.localID == 11) then result = "SUBANIMATION" end
-        
+
         if (self.postFix) then 
             result = result .. string.format(" '%s'", self.postFix)
         end
@@ -68,15 +69,19 @@ function SFDAnimationFramePart.getName(self)
     return result
 end
 
+---@param self SFDAnimationFramePart
 function SFDAnimationFramePart.calculateID(self)
-    ---@cast self SFDAnimationFramePart
-    if (self.globalID >= 0) then
-        self.typeID = self.globalID / SFDItem.PART_TEXTURE_RANGE
-        self.localID = math.abs(self.globalID % SFDItem.PART_TEXTURE_RANGE) + 1
-    else
-        self.typeID = -(-self.globalID / SFDItem.PART_TEXTURE_RANGE + 1)
-        self.localID = math.abs(self.globalID) + 1
-    end
+    if (not self.typeID or not self.localID) then
+        if (self.globalID >= 0) then
+            self.typeID = self.globalID / SFDItem.PART_TEXTURE_RANGE
+            self.localID = math.abs(self.globalID % SFDItem.PART_TEXTURE_RANGE) + 1
+        else
+            self.typeID = -(-self.globalID / SFDItem.PART_TEXTURE_RANGE + 1)
+            self.localID = math.abs(self.globalID) + 1
+        end
 
-    self.typeID = math.floor(self.typeID) + 1
+        self.typeID = math.floor(self.typeID) + 1
+    else
+        self.globalID = (self.typeID - 1) * SFDItem.PART_TEXTURE_RANGE + (self.localID - 1)
+    end
 end

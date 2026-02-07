@@ -1,11 +1,11 @@
 ---@class SFDItem : Instance
 ---@field postProcessTextures fun(self: SFDItem)
----@field getPart fun(self: SFDItem, partType: integer): SFDItemPart?
+---@field getPart fun(self: SFDItem, partType: number): SFDItemPart?
 ---@field getColorIndex fun(self: SFDItem, r: number, g: number, b: number, a: number): number?
 ---@field parts SFDItemPart[]
 ---@field fileName string
 ---@field gameName string
----@field equipmentLayer integer
+---@field equipmentLayer number
 ---@field itemID string
 ---@field jacketUnderBelt boolean
 ---@field canEquip boolean
@@ -49,17 +49,22 @@ function SFDItem.new()
     return self
 end
 
+---@param self SFDItem
 function SFDItem.postProcessTextures(self)
-    ---@cast self SFDItem
+    ---@param r number
+    ---@param g number
+    ---@param b number
+    ---@param a number
+    ---@return integer
+    local function packColor(r, g, b, a)
+        return Bit.bor(Bit.lshift(r * 255, 24), Bit.lshift(g * 255, 16), Bit.lshift(b * 255, 8), a * 255)
+    end
 
     self.colors = {}
     self.width = nil
     self.height = nil
 
     local packedColors = {}
-    local function packColor(r, g, b, a)
-        return Bit.bor(Bit.lshift(r * 255, 24), Bit.lshift(g * 255, 16), Bit.lshift(b * 255, 8), a * 255)
-    end
 
     for _, part in ipairs(self.parts) do
         for _, texture in pairs(part.textures) do
@@ -83,10 +88,10 @@ function SFDItem.postProcessTextures(self)
     end
 end
 
+---@param self SFDItem
+---@param partType number
+---@return SFDItemPart?
 function SFDItem.getPart(self, partType)
-    ---@cast self SFDItem
-    ---@cast partType integer
-
     -- the index of a part is not the same as the type
     for _, part in ipairs(self.parts) do
         if (part.typeID == partType) then
@@ -97,13 +102,13 @@ function SFDItem.getPart(self, partType)
     return nil
 end
 
+---@param self SFDItem
+---@param r number
+---@param g number
+---@param b number
+---@param a number
+---@return integer?
 function SFDItem.getColorIndex(self, r, g, b, a)
-    ---@cast self SFDItem
-    ---@cast r number
-    ---@cast g number
-    ---@cast b number
-    ---@cast a number
-
     for i, color in ipairs(self.colors) do
         if (color[1] == r and color[2] == g and color[3] == b and color[4] == a) then
             return i
@@ -132,6 +137,8 @@ function SFDItem.toBinary(item, path)
     stream:writeInt32(item.width)
     stream:writeInt32(item.height)
 
+    stream:writeColorTable(item.colors)
+    --[[
     stream:writeByte(#item.colors)
     for _, color in ipairs(item.colors) do
         stream:writeByte(color[1] * 255)
@@ -139,6 +146,7 @@ function SFDItem.toBinary(item, path)
         stream:writeByte(color[3] * 255)
         stream:writeByte((color[4] or 1) * 255)
     end
+    ]]
 
     stream:writeInt32(#item.parts)
     stream:writeByte(0)
@@ -211,6 +219,26 @@ end
 ---@param stream ByteStream
 ---@return SFDItem
 function SFDItem.fromBinary(stream)
+    ---@param imageData love.ImageData
+    ---@return boolean
+    local function imageDataIsEmpty(imageData)
+        local imageWidth, imageHeight = imageData:getDimensions()
+
+        if (imageWidth == 0 or imageHeight == 0) then
+            return true
+        end
+
+        for i=0, imageWidth * imageHeight - 1 do
+            local a = select(-1, imageData:getPixel(i % imageWidth, math.floor(i / imageHeight)))
+
+            if (a > 0) then
+                return false
+            end
+        end
+
+        return true
+    end
+
     local result = SFDItem.new()
 
     result.fileName = stream:readString()
@@ -227,6 +255,9 @@ function SFDItem.fromBinary(stream)
 
     local itemTexturePixelCount = result.width * result.height
 
+    result.colors = stream:readColorTable()
+
+    --[[
     local colorCount = stream:readByte()
     result.colors = {}
 
@@ -235,6 +266,7 @@ function SFDItem.fromBinary(stream)
 
         result.colors[i] = {r / 255, g / 255, b / 255, a / 255}
     end
+    ]]
 
     local partCount = stream:readInt32()
     stream:readByte()
@@ -265,7 +297,7 @@ function SFDItem.fromBinary(stream)
 
                 stream:readByte()
 
-                if (not ImageUtility.isEmpty(texture)) then
+                if (not imageDataIsEmpty(texture)) then
                     part.textures[j] = texture
 
                     emptyPart = false
@@ -303,7 +335,11 @@ function SFDItem.fromFolder(imagesPath, iniPath)
     for i, imageItem in ipairs(imageItems) do
         local pathItemName = PathUtility.getNameWithoutExtension(imageItem)
 
-        local pathItemNameSplit = StringUtility.split(pathItemName, "_")
+        local pathItemNameSplit = {}
+        for bit in string.gmatch(pathItemName, "([^_]+)") do
+            table.insert(pathItemNameSplit, bit)
+        end
+
         local texture = love.image.newImageData(imageItem)
 
         -- assume start at 0

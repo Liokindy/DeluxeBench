@@ -1,5 +1,5 @@
 ---@class IniHandler : Instance
----@field lines string[]
+---@field lines {[string]: string}
 ---@field set fun(self: IniHandler, key: string, value: string)
 ---@field get fun(self: IniHandler, key: string): string
 ---@field getNumber fun(self: IniHandler, key: string): number
@@ -31,10 +31,15 @@ function IniHandler.fromFile(path)
 
     if (info and info.type == "file") then
         for line in love.filesystem.lines(path) do
-            if (not StringUtility.isEmpty(line) and not (string.sub(line, 1, 1) == ";" or string.sub(line, 1, 1) == "[")) then
+            local firstCharacter = string.sub(line, 1, 1)
+            local isEmpty = (string.match(line, "^%s*$") ~= nil)
+
+            if (not isEmpty and not (firstCharacter == ";" or firstCharacter == "#" or firstCharacter == "[")) then
                 local key, value = IniHandler.splitLine(line)
 
-                result.lines[key] = value
+                if (key and value) then
+                    result.lines[key] = value
+                end
             end
         end
     end
@@ -43,20 +48,29 @@ function IniHandler.fromFile(path)
 end
 
 ---@param line string
----@return string, string
+---@return string?, string?
 function IniHandler.splitLine(line)
-    local items = StringUtility.split(line, "=")
+    line = string.match(line, "^%s*(.-)%s*$") -- spaces
+    line = string.gsub(line, "%s*[;#].*$", "") -- comments
 
-    local key = string.lower(items[1])
-    local value = table.concat(items, "=", 2)
+    if (line == "") then
+        return nil, nil
+    end
+
+    local key, value = string.match(line, "^(.-)=(.*)$") -- first "="
+    if (not key) then
+        return nil, nil
+    end
+
+    key = string.match(key, "^%s*(.-)%s*$") -- spaces
+    value = string.match(value, "^%s*(.-)%s*$") -- spaces
 
     return key, value
 end
 
+---@param self IniHandler
+---@param path string
 function IniHandler.toFile(self, path)
-    ---@cast self IniHandler
-    ---@cast path string
-
     local iniFileData = ""
 
     for key, value in pairs(self.lines) do
@@ -66,47 +80,44 @@ function IniHandler.toFile(self, path)
     love.filesystem.write(path, iniFileData)
 end
 
+---@param self IniHandler
+---@param key string
+---@return string
 function IniHandler.get(self, key)
-    ---@cast self IniHandler
-    ---@cast key string
-
     return self.lines[string.lower(key)]
 end
 
+---@param self IniHandler
+---@param key string
+---@param value string
 function IniHandler.set(self, key, value)
-    ---@cast self IniHandler
-    ---@cast key string
-    ---@cast value string
-
     self.lines[string.lower(key)] = value
 end
 
+---@param self IniHandler
+---@param key string
+---@return number?
 function IniHandler.getNumber(self, key)
-    ---@cast self IniHandler
-    ---@cast key string
-
     return tonumber(self:get(key))
 end
 
+---@param self IniHandler
+---@param key string
+---@param value number
 function IniHandler.setNumber(self, key, value)
-    ---@cast self IniHandler
-    ---@cast key string
-    ---@cast value number
-
     self:set(key, tostring(value))
 end
 
+---@param self IniHandler
+---@param key string
+---@return boolean
 function IniHandler.getBoolean(self, key)
-    ---@cast self IniHandler
-    ---@cast key string
-
     return string.lower(self:get(key)) == "true"
 end
 
+---@param self IniHandler
+---@param key string
+---@param value boolean
 function IniHandler.setBoolean(self, key, value)
-    ---@cast self IniHandler
-    ---@cast key string
-    ---@cast value boolean
-
     self:set(key, tostring(value))
 end
